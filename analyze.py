@@ -30,6 +30,44 @@ def search_news(query):
     except:
         return ["(新闻获取失败)"]
 
+# ── 拉 K 线数据 计算技术指标 ──
+def get_kline(code):
+    """获取30日K线，返回MA5/MA10/MA20/量比"""
+    mkt = "sh" if code.startswith("6") else "sz"
+    try:
+        url = f"http://money.finance.sina.com.cn/quotes_service/api/json_v2.php/CN_MarketData.getKLineData?symbol={mkt}{code}&scale=30&ma=no&datalen=30"
+        req = urllib.request.Request(url, headers={"Referer": "https://finance.sina.com.cn"})
+        data = json.loads(urllib.request.urlopen(req, timeout=10).read())
+        if not data: return None
+        closes = [float(d["close"]) for d in data]
+        volumes = [float(d["volume"]) for d in data]
+        latest = data[-1]
+        close = float(latest["close"])
+        ma5 = sum(closes[-5:])/5 if len(closes)>=5 else close
+        ma10 = sum(closes[-10:])/10 if len(closes)>=10 else close
+        ma20 = sum(closes[-20:])/20 if len(closes)>=20 else close
+        # 量比：今日量 / 近5日均量
+        vol_ratio = volumes[-1] / (sum(volumes[-6:-1])/5) if len(volumes)>=6 else 1.0
+        # 均线排列
+        if ma5 > ma10 > ma20: trend = "多头排列 📈"
+        elif ma5 < ma10 < ma20: trend = "空头排列 📉"
+        else: trend = "均线缠绕"
+        return {
+            "close": close, "open": float(latest["open"]), "high": float(latest["high"]), "low": float(latest["low"]),
+            "ma5": round(ma5,2), "ma10": round(ma10,2), "ma20": round(ma20,2),
+            "bias_ma5": round((close-ma5)/ma5*100,2),
+            "vol_ratio": round(vol_ratio,2), "trend": trend,
+            "volume": int(volumes[-1])
+        }
+    except:
+        return None
+
+tech_data = {}
+for s in holdings:
+    k = get_kline(s["code"])
+    if k:
+        tech_data[s["code"]] = k
+
 # ── 构建持仓摘要 ──
 holdings_text = ""
 total_value = 0
@@ -66,6 +104,9 @@ prompt = f"""你是专业的A股投资顾问。以下是用户的持仓数据和
 
 ## 今日行情
 """ + "\n".join(f"{v['name']}({k}): 现价{v['price']} 今开{v['open']} 最高{v['high']} 最低{v['low']}" for k,v in prices.items()) + f"""
+
+## 技术指标
+""" + "\n".join(f"{prices.get(c,{}).get('name',c)}({c}): MA5={t['ma5']} MA10={t['ma10']} MA20={t['ma20']} | 乖离率(MA5)={t['bias_ma5']}% | 量比={t['vol_ratio']} | 均线={t['trend']}" for c,t in tech_data.items()) + f"""
 
 ## 相关新闻
 {news_text}
