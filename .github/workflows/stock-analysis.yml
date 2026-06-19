@@ -26,9 +26,13 @@ jobs:
         continue-on-error: true
         run: |
           pip install -e ./alphasift_src 2>/dev/null
-          alphasift screen capital_heat --no-llm --max 5 > /tmp/alpha_picks.md 2>/dev/null || echo "(无)" > /tmp/alpha_picks.md
+          echo "### AlphaSift主力资金" > /tmp/alpha_picks.md
+          alphasift screen capital_heat --no-llm --max 5 2>/dev/null >> /tmp/alpha_picks.md
+          echo "" >> /tmp/alpha_picks.md
+          echo "### AlphaSift放量突破" >> /tmp/alpha_picks.md
+          alphasift screen volume_breakout --no-llm --max 5 2>/dev/null >> /tmp/alpha_picks.md
 
-      - name: Run daily stock analysis (with holdings from json)
+      - name: Run daily stock analysis
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL }}
@@ -40,3 +44,24 @@ jobs:
           RUN_IMMEDIATELY: 'true'
           MARKET_REVIEW_ENABLED: 'false'
         run: python run_analysis.py
+
+      - name: Push AlphaSift picks
+        continue-on-error: true
+        run: |
+          if [ -s /tmp/alpha_picks.md ]; then
+            python3 -c "
+          import urllib.request, urllib.parse, json, os
+          picks = open('/tmp/alpha_picks.md').read()
+          token = os.environ.get('PUSHPLUS_TOKEN','')
+          skey = os.environ.get('SERVERCHAN3_SENDKEY','')
+          if token:
+              data = json.dumps({'token': token, 'title': 'AlphaSift选股', 'content': picks[:5000]}).encode()
+              urllib.request.urlopen(urllib.request.Request('https://www.pushplus.plus/send', data=data, headers={'Content-Type':'application/json'}), timeout=10)
+          if skey:
+              urllib.request.urlopen(f'https://sctapi.ftqq.com/{skey}.send?title=AlphaSift选股&desp={urllib.parse.quote(picks[:5000])}', timeout=10)
+          print('选股已推送')
+          " 2>/dev/null || echo "推送失败"
+          fi
+        env:
+          PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
+          SERVERCHAN3_SENDKEY: ${{ secrets.SERVERCHAN3_SENDKEY }}
