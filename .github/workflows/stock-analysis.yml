@@ -23,19 +23,9 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: |
-          pip install -r requirements.txt
-          pip install -e ./alphasift
+        run: pip install -r requirements.txt
 
-      - name: AlphaSift 全市场选股
-        run: |
-          echo "=== 全市场扫描 ==="
-          alphasift screen capital_heat --no-llm --max 5 2>/dev/null || echo "选股跳过"
-          echo "=== 放量突破 ==="
-          alphasift screen volume_breakout --no-llm --max 3 2>/dev/null || echo "选股跳过"
-        continue-on-error: true
-
-      - name: Run stock analysis
+      - name: Run AlphaSift + stock analysis
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL }}
