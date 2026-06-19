@@ -44,13 +44,8 @@ jobs:
           OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL }}
           LITELLM_MODEL: openai/deepseek-chat
           TAVILY_API_KEYS: ${{ secrets.TAVILY_API_KEYS }}
-          SERVERCHAN3_SENDKEY: ${{ secrets.SERVERCHAN3_SENDKEY }}
+          PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
           SCHEDULE_ENABLED: 'false'
           RUN_IMMEDIATELY: 'true'
           MARKET_REVIEW_ENABLED: 'false'
-        run: |
-          STOCK_LIST=$(python3 -c "import json;d=json.load(open('holdings.json'));print(','.join(s['code']for s in d['stocks']))")
-          POSCTX=$(python3 -c "import json;d=json.load(open('holdings.json'));print(' '.join(f\"{s['name']}{s['code']}持{s['shares']}股成本{s['cost']}\" for s in d['stocks']))")
-          [ -f /tmp/picks.md ] && export MARKET_PICKS=$(cat /tmp/picks.md)
-          export STOCK_LIST POSITION_CONTEXT="$POSCTX"
-          python main.py --force-run
+        run: python run_analysis.py
