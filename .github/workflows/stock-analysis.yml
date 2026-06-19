@@ -25,7 +25,14 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Run AlphaSift + stock analysis
+      - name: AlphaSift 选股
+        run: |
+          git clone --depth 1 https://github.com/ZhuLinsen/alphasift.git /tmp/alphasift
+          pip install -e /tmp/alphasift
+          alphasift screen capital_heat --no-llm --max 5
+        continue-on-error: true
+
+      - name: Run stock analysis
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL }}
