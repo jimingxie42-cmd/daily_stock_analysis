@@ -45,6 +45,7 @@ jobs:
           LITELLM_MODEL: openai/deepseek-chat
           TAVILY_API_KEYS: ${{ secrets.TAVILY_API_KEYS }}
           PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
+          SERVERCHAN3_SENDKEY: ${{ secrets.SERVERCHAN3_SENDKEY }}
           SCHEDULE_ENABLED: 'false'
           RUN_IMMEDIATELY: 'true'
           MARKET_REVIEW_ENABLED: 'false'
