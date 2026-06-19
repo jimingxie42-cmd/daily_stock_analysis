@@ -2,45 +2,50 @@ name: 股票智能分析
 
 on:
   schedule:
-    - cron: '35 1 * * 1-5'     # 9:35  开盘选股+持仓分析
-    - cron: '25 2 * * 1-5'     # 10:25 盘中确认
-    - cron: '25 3 * * 1-5'     # 11:25 午盘准备
-    - cron: '5 5 * * 1-5'      # 13:05 午后战略
-    - cron: '40 6 * * 1-5'     # 14:40 收盘决策
+    - cron: '35 1 * * 1-5'
+    - cron: '25 2 * * 1-5'
+    - cron: '25 3 * * 1-5'
+    - cron: '5 5 * * 1-5'
+    - cron: '40 6 * * 1-5'
   workflow_dispatch:
 
 jobs:
   analyze:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-
     steps:
       - uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      - name: Install dependencies
-        run: pip install -r requirements.txt
-
-      - name: AlphaSift 选股
+      - name: Install deps & AlphaSift
         run: |
-          git clone --depth 1 https://github.com/ZhuLinsen/alphasift.git /tmp/alphasift
-          pip install -e /tmp/alphasift
-          alphasift screen capital_heat --no-llm --max 5
+          pip install -r requirements.txt
+          git clone --depth 1 https://github.com/ZhuLinsen/alphasift.git /tmp/alphasift 2>/dev/null
+          pip install -q -e /tmp/alphasift 2>/dev/null
+
+      - name: AlphaSift market screening
+        run: |
+          echo "### AI精选" > /tmp/picks.md
+          alphasift screen capital_heat --no-llm --max 5 2>/dev/null >> /tmp/picks.md
+          echo "" >> /tmp/picks.md
+          alphasift screen volume_breakout --no-llm --max 3 2>/dev/null >> /tmp/picks.md
         continue-on-error: true
 
-      - name: Run stock analysis
+      - name: Run analysis
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL }}
           LITELLM_MODEL: openai/deepseek-chat
-          STOCK_LIST: ${{ secrets.STOCK_LIST }}
           TAVILY_API_KEYS: ${{ secrets.TAVILY_API_KEYS }}
           SERVERCHAN3_SENDKEY: ${{ secrets.SERVERCHAN3_SENDKEY }}
           SCHEDULE_ENABLED: 'false'
           RUN_IMMEDIATELY: 'true'
           MARKET_REVIEW_ENABLED: 'false'
-        run: python main.py --force-run
+        run: |
+          STOCK_LIST=$(python3 -c "import json;d=json.load(open('holdings.json'));print(','.join(s['code']for s in d['stocks']))")
+          POSCTX=$(python3 -c "import json;d=json.load(open('holdings.json'));print(' '.join(f\"{s['name']}{s['code']}持{s['shares']}股成本{s['cost']}\" for s in d['stocks']))")
+          [ -f /tmp/picks.md ] && export MARKET_PICKS=$(cat /tmp/picks.md)
+          export STOCK_LIST POSITION_CONTEXT="$POSCTX"
+          python main.py --force-run
