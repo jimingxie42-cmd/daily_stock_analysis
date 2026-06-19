@@ -22,25 +22,17 @@ jobs:
       - name: Install deps
         run: pip install -r requirements.txt
 
-      - name: AlphaSift 选股 (仅9:35和14:35)
+      - name: AlphaSift 选股
         timeout-minutes: 5
         continue-on-error: true
         run: |
-          H=$(date -u +%H)
-          if [ "$H" = "01" ] || [ "$H" = "06" ]; then
-            git clone --depth 1 https://github.com/ZhuLinsen/alphasift.git /tmp/alphasift 2>/dev/null
-            pip install -q -e /tmp/alphasift 2>/dev/null
-            python3 -c "
-          import subprocess, sys
-          # 限制主板: sh60, sh68 excluded, sz00, sz30 excluded
-          strategies = ['capital_heat', 'volume_breakout']
-          for s in strategies:
-              print(f'=== {s} ===')
-              subprocess.run(f'alphasift screen {s} --no-llm --max 5', shell=True, timeout=240)
-          " 2>/dev/null || echo "选股超时"
-          else
-            echo "非选股时段，跳过"
-          fi
+          git clone --depth 1 https://github.com/ZhuLinsen/alphasift.git /tmp/alphasift 2>/dev/null || true
+          pip install -q -e /tmp/alphasift 2>/dev/null || true
+          echo "### AI选股" > /tmp/picks.md
+          alphasift screen capital_heat --no-llm --max 5 2>/dev/null >> /tmp/picks.md || echo "capital_heat skipped" >> /tmp/picks.md
+          echo "" >> /tmp/picks.md
+          alphasift screen volume_breakout --no-llm --max 3 2>/dev/null >> /tmp/picks.md || echo "volume_breakout skipped" >> /tmp/picks.md
+          cat /tmp/picks.md
 
       - name: Run holdings analysis
         env:
