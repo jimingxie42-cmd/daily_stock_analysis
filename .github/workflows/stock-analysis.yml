@@ -2,70 +2,25 @@ name: 股票智能分析
 
 on:
   schedule:
-    - cron: '0 1 * * 1-5'      # 9:00  BJT 选股+持仓
-    - cron: '0 2 * * 1-5'      # 10:00 BJT 持仓分析
-    - cron: '15 3 * * 1-5'     # 11:15 BJT 持仓分析
-    - cron: '30 5 * * 1-5'     # 13:30 BJT 持仓分析
-    - cron: '30 7 * * 1-5'     # 15:30 BJT 选股+持仓+买卖建议
+    - cron: '0 1 * * 1-5'      # 9:00  BJT
+    - cron: '0 2 * * 1-5'      # 10:00 BJT
+    - cron: '15 3 * * 1-5'     # 11:15 BJT
+    - cron: '30 5 * * 1-5'     # 13:30 BJT
+    - cron: '30 7 * * 1-5'     # 15:30 BJT
   workflow_dispatch:
 
 jobs:
   analyze:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 8
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
 
-      - name: Install deps
-        run: pip install -r requirements.txt
-
-      - name: Sina market screening + push
-        continue-on-error: true
-        run: |
-          H=$(date -u +%H)
-          if [ "$H" = "01" ] || [ "$H" = "07" ] || [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
-            python3 -c "
-          import urllib.request, json, os
-          url = 'http://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page=1&num=60&sort=changepercent&asc=0&node=hs_a'
-          req = urllib.request.Request(url, headers={'Referer': 'https://finance.sina.com.cn'})
-          data = json.loads(urllib.request.urlopen(req, timeout=15).read().decode('gbk'))
-          picks = []
-          for s in data:
-              chg = float(s['changepercent']); turnover = float(s.get('turnoverratio',0) or 0)
-              code = s['code']
-              if 2 < chg < 8 and turnover > 3 and (code.startswith('60') or code.startswith('00')):
-                  picks.append(f\"{s['name']}({code}) 涨{chg:+.1f}% 换手{turnover:.1f}%\")
-                  if len(picks) >= 8: break
-          msg = '## 今日强势股\\\\n' + '\\\\n'.join(picks) if picks else '(无符合条件的个股)'
-          token = os.environ.get('PUSHPLUS_TOKEN',''); skey = os.environ.get('SERVERCHAN3_SENDKEY','')
-          import urllib.parse
-          if token:
-              payload = json.dumps({'token': token, 'title': '今日选股', 'content': msg[:4000]}).encode()
-              urllib.request.urlopen(urllib.request.Request('https://www.pushplus.plus/send', data=payload, headers={'Content-Type':'application/json'}), timeout=10)
-          if skey:
-              urllib.request.urlopen(f'https://sctapi.ftqq.com/{skey}.send?title=今日选股&desp={urllib.parse.quote(msg[:4000])}', timeout=10)
-          print('选股已推送')
-          " 2>&1
-          fi
-        env:
-          PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
-          SERVERCHAN3_SENDKEY: ${{ secrets.SERVERCHAN3_SENDKEY }}
-
-      - name: Run holdings analysis
+      - name: Run analysis
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL }}
-          LITELLM_MODEL: openai/deepseek-chat
           TAVILY_API_KEYS: ${{ secrets.TAVILY_API_KEYS }}
           PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
           SERVERCHAN3_SENDKEY: ${{ secrets.SERVERCHAN3_SENDKEY }}
-          SCHEDULE_ENABLED: 'false'
-          RUN_IMMEDIATELY: 'true'
-          MARKET_REVIEW_ENABLED: 'false'
-          TRADING_DAY_CHECK_ENABLED: 'true'
-          FORCE_RUN: ${{ github.event_name == 'workflow_dispatch' && 'true' || 'false' }}
-        run: python run_analysis.py
-
+        run: python analyze.py
