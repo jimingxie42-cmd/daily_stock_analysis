@@ -19,31 +19,11 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install deps
-        run: pip install -r requirements.txt
-
-      - name: AlphaSift 选股
-        timeout-minutes: 5
-        continue-on-error: true
-        run: |
-          git clone --depth 1 https://github.com/ZhuLinsen/alphasift.git /tmp/alphasift 2>/dev/null || true
-          pip install -q -e /tmp/alphasift 2>/dev/null || true
-          echo "### AI选股" > /tmp/picks.md
-          alphasift screen capital_heat --no-llm --max 5 2>/dev/null >> /tmp/picks.md || echo "capital_heat skipped" >> /tmp/picks.md
-          echo "" >> /tmp/picks.md
-          alphasift screen volume_breakout --no-llm --max 3 2>/dev/null >> /tmp/picks.md || echo "volume_breakout skipped" >> /tmp/picks.md
-          cat /tmp/picks.md
-
-      - name: Run holdings analysis
+      - name: Run custom analysis
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL }}
-          LITELLM_MODEL: openai/deepseek-chat
-          LITELLM_TEMPERATURE: '0.3'
           TAVILY_API_KEYS: ${{ secrets.TAVILY_API_KEYS }}
           PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
           SERVERCHAN3_SENDKEY: ${{ secrets.SERVERCHAN3_SENDKEY }}
-          SCHEDULE_ENABLED: 'false'
-          RUN_IMMEDIATELY: 'true'
-          MARKET_REVIEW_ENABLED: 'false'
-        run: python run_analysis.py
+        run: python analyze.py
