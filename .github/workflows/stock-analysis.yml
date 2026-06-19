@@ -2,13 +2,12 @@ name: 股票智能分析
 
 on:
   schedule:
-    # 每天5次，精准覆盖关键决策窗口 (UTC = BJT-8)
-    - cron: '35 1 * * 1-5'     # 9:35  开盘分析
+    - cron: '35 1 * * 1-5'     # 9:35  开盘选股+持仓分析
     - cron: '25 2 * * 1-5'     # 10:25 盘中确认
     - cron: '25 3 * * 1-5'     # 11:25 午盘准备
     - cron: '5 5 * * 1-5'      # 13:05 午后战略
     - cron: '40 6 * * 1-5'     # 14:40 收盘决策
-  workflow_dispatch:  # 手动触发
+  workflow_dispatch:
 
 jobs:
   analyze:
@@ -24,7 +23,17 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: |
+          pip install -r requirements.txt
+          pip install -e ./alphasift
+
+      - name: AlphaSift 全市场选股
+        run: |
+          echo "=== 全市场扫描 ==="
+          alphasift screen capital_heat --no-llm --max 5 2>/dev/null || echo "选股跳过"
+          echo "=== 放量突破 ==="
+          alphasift screen volume_breakout --no-llm --max 3 2>/dev/null || echo "选股跳过"
+        continue-on-error: true
 
       - name: Run stock analysis
         env:
