@@ -19,25 +19,24 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install AlphaSift
-        run: pip install -e ./alphasift_src
+      - name: Install deps
+        run: pip install -r requirements.txt
 
-      - name: Run AlphaSift market screening
+      - name: AlphaSift screening
         continue-on-error: true
         run: |
-          echo "### 主力资金" > /tmp/alpha_picks.md
-          alphasift screen capital_heat --no-llm --max 5 2>/dev/null >> /tmp/alpha_picks.md || echo "跳过" >> /tmp/alpha_picks.md
-          echo "" >> /tmp/alpha_picks.md
-          echo "### 放量突破" >> /tmp/alpha_picks.md
-          alphasift screen volume_breakout --no-llm --max 3 2>/dev/null >> /tmp/alpha_picks.md || echo "跳过" >> /tmp/alpha_picks.md
-          cat /tmp/alpha_picks.md
+          pip install -e ./alphasift_src 2>/dev/null
+          alphasift screen capital_heat --no-llm --max 5 > /tmp/alpha_picks.md 2>/dev/null || echo "(无)" > /tmp/alpha_picks.md
 
-      - name: Run holdings analysis
+      - name: Run daily stock analysis (with holdings from json)
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL }}
+          LITELLM_MODEL: openai/deepseek-chat
           TAVILY_API_KEYS: ${{ secrets.TAVILY_API_KEYS }}
           PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
           SERVERCHAN3_SENDKEY: ${{ secrets.SERVERCHAN3_SENDKEY }}
-          ALPHA_PICKS_FILE: /tmp/alpha_picks.md
-        run: python analyze.py
+          SCHEDULE_ENABLED: 'false'
+          RUN_IMMEDIATELY: 'true'
+          MARKET_REVIEW_ENABLED: 'false'
+        run: python run_analysis.py
