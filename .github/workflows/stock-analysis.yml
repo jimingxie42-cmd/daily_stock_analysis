@@ -2,11 +2,11 @@ name: 股票智能分析
 
 on:
   schedule:
-    - cron: '35 1 * * 1-5'
-    - cron: '25 2 * * 1-5'
-    - cron: '25 3 * * 1-5'
-    - cron: '5 5 * * 1-5'
-    - cron: '40 6 * * 1-5'
+    - cron: '35 1 * * 1-5'     # 9:35  选股+持仓
+    - cron: '25 2 * * 1-5'     # 10:25 持仓分析
+    - cron: '25 3 * * 1-5'     # 11:25 持仓分析
+    - cron: '5 5 * * 1-5'      # 13:05 持仓分析
+    - cron: '35 6 * * 1-5'     # 14:35 选股+持仓+买卖建议
   workflow_dispatch:
 
 jobs:
@@ -19,18 +19,23 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install deps & AlphaSift
-        run: |
-          pip install -r requirements.txt
-          git clone --depth 1 https://github.com/ZhuLinsen/alphasift.git /tmp/alphasift 2>/dev/null
-          pip install -q -e /tmp/alphasift 2>/dev/null
+      - name: Install deps
+        run: pip install -r requirements.txt
 
-      - name: AlphaSift market screening
+      - name: AlphaSift 选股 (仅9:35和14:35)
         run: |
-          echo "### AI精选" > /tmp/picks.md
-          alphasift screen capital_heat --no-llm --max 5 2>/dev/null >> /tmp/picks.md
-          echo "" >> /tmp/picks.md
-          alphasift screen volume_breakout --no-llm --max 3 2>/dev/null >> /tmp/picks.md
+          H=$(date -u +%H)
+          if [ "$H" = "01" ] || [ "$H" = "06" ]; then
+            git clone --depth 1 https://github.com/ZhuLinsen/alphasift.git /tmp/alphasift 2>/dev/null
+            pip install -q -e /tmp/alphasift 2>/dev/null
+            echo "### AI精选" > /tmp/picks.md
+            alphasift screen capital_heat --no-llm --max 5 2>/dev/null >> /tmp/picks.md
+            echo "" >> /tmp/picks.md
+            alphasift screen volume_breakout --no-llm --max 3 2>/dev/null >> /tmp/picks.md
+            echo "选股完成" >> /tmp/picks.md
+          else
+            echo "持仓分析时段，跳过选股" > /tmp/picks.md
+          fi
         continue-on-error: true
 
       - name: Run analysis
