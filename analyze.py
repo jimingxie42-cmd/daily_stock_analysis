@@ -120,12 +120,19 @@ def get_top_movers():
         print(f"选股失败: {e}")
     return candidates[:5]
 
-picks = get_top_movers()
+# 优先读 AlphaSift 选股结果
 picks_text = ""
-if picks:
-    picks_text = "## 今日市场强势候选（涨幅2-8%，换手>3%，主板）\n"
-    picks_text += "\n".join(f"- {p['name']}({p['code']}) | 价格{p['price']} | 涨{p['chg_pct']:+.1f}% | 换手{p['turnover']:.1f}%" for p in picks)
-    picks_text += "\n\n请结合这些候选股，对比用户持仓，给出是否应该换仓的建议。"
+alpha_file = os.environ.get("ALPHA_PICKS_FILE", "/tmp/alpha_picks.md")
+if os.path.exists(alpha_file):
+    picks_text = open(alpha_file).read().strip()
+    if picks_text:
+        picks_text = "## AlphaSift全市场选股\n" + picks_text + "\n\n请结合这些选股结果，对比用户持仓，给出是否应该换仓的建议。"
+if not picks_text:
+    picks = get_top_movers()
+    if picks:
+        picks_text = "## 今日市场强势候选（涨幅2-8%，换手>3%，主板）\n"
+        picks_text += "\n".join(f"- {p['name']}({p['code']}) | 价格{p['price']} | 涨{p['chg_pct']:+.1f}% | 换手{p['turnover']:.1f}%" for p in picks)
+        picks_text += "\n\n请结合这些候选股，对比用户持仓，给出是否应该换仓的建议。"
 
 # ── 调 DeepSeek ──
 prompt = f"""你是专业的A股投资顾问。以下是用户的持仓数据和今日行情，请给每只股票给出操作建议。
