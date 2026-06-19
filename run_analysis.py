@@ -16,4 +16,7 @@ env["POSITION_CONTEXT"] = ctx
 
 print(f"STOCK_LIST={stock_str}")
 
-subprocess.run([sys.executable, "main.py", "--force-run"], env=env)
+args = [sys.executable, "main.py"]
+if os.environ.get("FORCE_RUN", "false") == "true":
+    args.append("--force-run")
+subprocess.run(args, env=env)
