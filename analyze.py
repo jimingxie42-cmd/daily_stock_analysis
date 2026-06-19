@@ -96,6 +96,37 @@ for s in holdings:
     if items:
         news_text += f"\n### {name}({c})\n" + "\n".join(f"- {i}" for i in items[:2])
 
+# ── 市场热点选股 ──
+def get_top_movers():
+    """从新浪拉涨幅榜+换手率榜，筛选潜在标的"""
+    candidates = []
+    try:
+        # 涨幅榜前40
+        url = "http://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page=1&num=40&sort=changepercent&asc=0&node=hs_a"
+        req = urllib.request.Request(url, headers={"Referer": "https://finance.sina.com.cn"})
+        data = urllib.request.urlopen(req, timeout=10).read().decode("gbk")
+        stocks = json.loads(data)
+        for s in stocks:
+            code = s["code"]; name = s["name"]
+            chg = float(s["changepercent"]); vol = int(s["volume"])/100 if s["volume"] else 0
+            turnover = float(s.get("turnoverratio", 0) or 0)
+            price = float(s["trade"])
+            # 筛选：涨幅2-8%（健康上涨非涨停）、主板优先、换手>3%
+            if 2 < chg < 8 and turnover > 3 and (code.startswith("60") or code.startswith("00")):
+                candidates.append({"code": code, "name": name, "price": price, "chg_pct": chg, "turnover": turnover, "vol": vol})
+            if len(candidates) >= 8:
+                break
+    except Exception as e:
+        print(f"选股失败: {e}")
+    return candidates[:5]
+
+picks = get_top_movers()
+picks_text = ""
+if picks:
+    picks_text = "## 今日市场强势候选（涨幅2-8%，换手>3%，主板）\n"
+    picks_text += "\n".join(f"- {p['name']}({p['code']}) | 价格{p['price']} | 涨{p['chg_pct']:+.1f}% | 换手{p['turnover']:.1f}%" for p in picks)
+    picks_text += "\n\n请结合这些候选股，对比用户持仓，给出是否应该换仓的建议。"
+
 # ── 调 DeepSeek ──
 prompt = f"""你是专业的A股投资顾问。以下是用户的持仓数据和今日行情，请给每只股票给出操作建议。
 
@@ -110,6 +141,8 @@ prompt = f"""你是专业的A股投资顾问。以下是用户的持仓数据和
 
 ## 相关新闻
 {news_text}
+
+{picks_text}
 
 请按以下格式输出：
 ## 综合评分与操作建议
