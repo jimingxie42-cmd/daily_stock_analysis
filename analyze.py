@@ -158,8 +158,12 @@ def push_pushplus(title, content):
 
 title = f"投资分析 {time.strftime('%H:%M')}"
 full = f"{result}\n\n---\n持仓数据来源: 新浪实时行情 | 分析: DeepSeek"
-push_serverchan(title, full)
-push_pushplus(title, full)
 
 print(result)
-print("\n✅ 推送完成")
+for pusher in [push_serverchan, push_pushplus]:
+    try:
+        pusher(title, full)
+    except Exception as e:
+        print(f"推送失败({pusher.__name__}): {e}")
+
+print("\n✅ 分析完成")
