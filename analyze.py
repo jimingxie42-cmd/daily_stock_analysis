@@ -130,10 +130,60 @@ if utc_hour in [0, 6]:  # 8:30 或 14:30 BJT
         picks_text += "\n".join(f"- {p['name']}({p['code']}) | 价格{p['price']} | 涨{p['chg_pct']:+.1f}% | 换手{p['turnover']:.1f}%" for p in picks)
         picks_text += "\n\n请结合这些候选股，对比用户持仓，给出是否应该换仓的建议。"
 
-# ── 调 DeepSeek ──
-prompt = f"""你是专业的A股投资顾问。以下是用户的持仓数据和今日行情，请给每只股票给出操作建议。
+# ── 调 DeepSeek（嵌入 skill 框架）──
+SYSTEM_PROMPT = """你是专业的A股投资顾问，采用以下三层分析框架：
 
-## 用户持仓
+【财务健康层 | financial-health】
+- 盈利质量：经营现金流/净利润 >1.0 才是真金白银；应收款增速>营收增速是回款恶化信号
+- 红色预警清单：营收增而经营现金流降 | 应收款增速超营收 | 存货激增无匹配发货 | 财务费用升而利润弱 | 大额短期债务墙
+- 对周期股：毛利率趋势比绝对值重要，成本刚性上升是关键隐患
+
+【行业竞争与护城河层 | industry-competition-moat】
+- 周期定位：判断当前处于周期顶部/中部/底部，结合库存、产能、需求
+- 成本曲线位置：在行业成本曲线低位才有穿越周期的能力
+- 竞争威胁：新产能投放节奏、替代品、政策风险
+
+【风险催化层 | risk-warning-catalysts】
+- 区分短期催化剂（1-4周）与中长期结构风险（3-12个月）
+- 每条风险标注：触发概率（高/中/低）× 影响程度（致命/重大/有限）
+- 给出具体监测指标和阈值
+
+输出必须严格按以下结构，不可跳过任何部分：
+
+## 一、事实与数据
+（基于提供的数据，逐只列出核心事实。标注数据来源。）
+
+## 二、财务健康诊断
+（每只股票：盈利质量评估 | 现金流健康度 | 红色预警信号（有/无，具体原因））
+
+## 三、行业周期与护城河
+（每只股票：当前周期位置 | 成本竞争力 | 竞争格局变化）
+
+## 四、综合评分与操作建议
+| 股票 | 评分(0-100) | 建议 | 持仓成本 | 现价 | 浮盈(%) | 核心理由 |
+|------|:---:|------|------|------|------|------|
+（评分维度：财务健康30分 + 行业位置25分 + 技术面20分 + 风险调整25分。必须基于用户实际持仓成本。）
+
+## 五、情景推演
+（每只股票给出2-3个情景：乐观/中性/悲观，含关键假设和触发条件）
+
+## 六、买卖点位与仓位
+| 股票 | 买入/加仓点 | 止盈位 | 止损位 | 当前建议仓位 |
+|------|------|------|------|------|
+（给出具体价格和仓位百分比）
+
+## 七、候选股对比（如有候选股数据）
+（对比今日强势候选股，判断是否需要换仓）
+
+## 八、风险矩阵
+| 风险 | 标的 | 触发概率 | 影响程度 | 监测指标 | 时间窗口 |
+|------|------|------|------|------|------|
+
+## 九、下周监测清单
+- [ ] 关键指标1：阈值X
+- [ ] 关键指标2：阈值Y"""
+
+prompt = f"""## 用户持仓
 {holdings_text}
 
 ## 今日行情
@@ -147,56 +197,40 @@ prompt = f"""你是专业的A股投资顾问。以下是用户的持仓数据和
 
 {picks_text}
 
-请按以下格式输出完整的【决策仪表盘】：
-
-## 综合评分与操作建议
-| 股票 | 评分(0-100) | 建议 | 持仓成本 | 现价 | 浮盈(%) | 理由 |
-|------|:---:|------|------|------|------|------|
-（每只一行，评分必须基于用户实际持仓成本）
-
-## 详细分析
-（每只股票一段话，必须结合用户的持仓成本给出个性化建议。例如「您的成本32.26元，现价53.50元，浮盈65.9%，建议持有并设止盈位58元」）
-
-## 买卖点位
-| 股票 | 买入点 | 加仓位 | 止盈位 | 止损位 |
-|------|------|------|------|------|
-（给出具体价格）
-
-## 今日候选股（对比持仓）
-（对比今日强势候选股，判断是否需要换仓。如果候选股明显优于持仓中的某只，请明确指出）
-
-## 风险提示
-（整体风险提示）"""
+请严格按系统指令中的九段结构输出完整分析。"""
 
 api_key = os.environ.get("OPENAI_API_KEY", "")
 api_base = os.environ.get("OPENAI_BASE_URL", "https://api.deepseek.com/v1")
-api_model = os.environ.get("LITELLM_MODEL", "openai/deepseek-chat")
+api_model = os.environ.get("LITELLM_MODEL", "openai/deepseek-v4-pro")
 # 如果模型名有前缀，去掉
 if "/" in api_model:
     api_model = api_model.split("/")[-1]
 
 payload = {
     "model": api_model,
-    "messages": [{"role": "user", "content": prompt}],
+    "messages": [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "user", "content": prompt}
+    ],
     "temperature": 0.3,
-    "max_tokens": 2000,
+    "max_tokens": 3000,
 }
 req = urllib.request.Request(f"{api_base}/chat/completions",
     data=json.dumps(payload).encode(),
     headers={"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"})
-resp = json.loads(urllib.request.urlopen(req, timeout=60).read())
+resp = json.loads(urllib.request.urlopen(req, timeout=120).read())
 result = resp["choices"][0]["message"]["content"]
 
 # ── 推送 ──
 def push_serverchan(title, content):
     key = os.environ.get("SERVERCHAN3_SENDKEY", "")
     if key:
-        urllib.request.urlopen(f"https://sctapi.ftqq.com/{key}.send?title={urllib.parse.quote(title)}&desp={urllib.parse.quote(content[:5000])}", timeout=10)
+        urllib.request.urlopen(f"https://sctapi.ftqq.com/{key}.send?title={urllib.parse.quote(title)}&desp={urllib.parse.quote(content[:8000])}", timeout=10)
 
 def push_pushplus(title, content):
     token = os.environ.get("PUSHPLUS_TOKEN", "")
     if token:
-        data = json.dumps({"token": token, "title": title, "content": content[:5000]})
+        data = json.dumps({"token": token, "title": title, "content": content[:8000]})
         req = urllib.request.Request("https://www.pushplus.plus/send", data=data.encode(),
             headers={"Content-Type": "application/json"})
         urllib.request.urlopen(req, timeout=10)
