@@ -120,10 +120,10 @@ def get_top_movers():
         print(f"选股失败: {e}")
     return candidates[:5]
 
-# 选股：仅在9:00和15:30（UTC 1点、7点）执行
+# 选股：仅在8:30和14:30（UTC 0点、6点）执行盘前推荐+盘后复盘
 picks_text = ""
 utc_hour = time.gmtime().tm_hour
-if utc_hour in [1, 7]:  # 9:00 或 15:30 BJT
+if utc_hour in [0, 6]:  # 8:30 或 14:30 BJT
     picks = get_top_movers()
     if picks:
         picks_text = "## 今日市场强势候选（涨幅2-8%，换手>3%，主板）\n"
