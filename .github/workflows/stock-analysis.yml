@@ -20,6 +20,7 @@ jobs:
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL }}
+          LITELLM_MODEL: openai/deepseek-v4-pro
           TAVILY_API_KEYS: ${{ secrets.TAVILY_API_KEYS }}
           PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
           SERVERCHAN3_SENDKEY: ${{ secrets.SERVERCHAN3_SENDKEY }}
