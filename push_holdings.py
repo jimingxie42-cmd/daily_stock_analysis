@@ -140,8 +140,10 @@ else:
 
 # ── 5. 同步到 Obsidian ──
 vault_path = Path.home() / "Documents/ObsidianVault/03_领域/投资理财" / f"{today_str}-持仓分析.md"
-with open(vault_path, "w", encoding="utf-8") as f:
-    ob_content = f"""---
+try:
+    vault_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(vault_path, "w", encoding="utf-8") as f:
+        ob_content = f"""---
 date: {today_str}
 time: {time_str}
 tags: [投资, 持仓分析, 推送]
@@ -149,5 +151,7 @@ tags: [投资, 持仓分析, 推送]
 
 {content}
 """
-    f.write(ob_content)
-print(f"📓 Obsidian → {vault_path}")
+        f.write(ob_content)
+    print(f"📓 Obsidian → {vault_path}")
+except Exception as e:
+    print(f"⏭️ Obsidian 同步跳过 ({e})")
