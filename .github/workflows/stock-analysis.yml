@@ -1,22 +1,34 @@
-name: 股票智能分析
+name: 股票分析推送
 
 on:
   schedule:
-    - cron: '30 0 * * 1-5'     # 8:30  BJT  盘前推荐+买入建议
-    - cron: '30 1 * * 1-5'     # 9:30  BJT  开盘快照
-    - cron: '30 2 * * 1-5'     # 10:30 BJT  盘中快照
-    - cron: '30 5 * * 1-5'     # 13:30 BJT  午后快照
-    - cron: '30 6 * * 1-5'     # 14:30 BJT  盘后复盘+推荐+买入建议
+    - cron: '30 1 * * 1-5'     # 9:30  BJT  开盘快照推送
+    - cron: '30 2 * * 1-5'     # 10:30 BJT  盘中快照推送
+    - cron: '30 5 * * 1-5'     # 13:30 BJT  午后快照推送
+    - cron: '30 6 * * 1-5'     # 14:30 BJT  盘后复推送
   workflow_dispatch:
 
 jobs:
-  analyze:
+  push:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
 
-      - name: Run analysis
+      - name: 安装依赖
+        run: pip install -r requirements.txt
+
+      - name: 📊 持仓快照推送
+        env:
+          PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
+          SERVERCHAN3_SENDKEY: ${{ secrets.SERVERCHAN3_SENDKEY }}
+        run: python push_holdings.py
+
+      - name: 🤖 AI 分析推送
+        if: ${{ vars.RUN_AI_ANALYSIS == 'true' || github.event_name == 'workflow_dispatch' }}
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL }}
