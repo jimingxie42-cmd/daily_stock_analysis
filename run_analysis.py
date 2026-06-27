@@ -18,11 +18,16 @@ time_str = now.strftime("%H:%M")
 with open(BASE / "holdings.json") as f:
     h = json.load(f)
 stocks = h["stocks"]
+
+# 清除代理干扰（DSA 的东财接口走代理会失败）
+for k in ["https_proxy", "http_proxy", "HTTPS_PROXY", "HTTP_PROXY"]:
+    env.pop(k, None)
+
 env["STOCK_LIST"] = ",".join(s["code"] for s in stocks)
 print(f"STOCK_LIST={env['STOCK_LIST']}")
 
 # ── 2. 跑主程序（AI分析+推送）──
-args = [sys.executable, "main.py"]
+args = [str(BASE / ".venv/bin/python"), "main.py"]
 if os.environ.get("FORCE_RUN", "false") == "true":
     args.append("--force-run")
 result = subprocess.run(args, env=env, capture_output=True, text=True)
