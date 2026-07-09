@@ -126,13 +126,12 @@ for s in holdings:
     if items:
         news_text += f"\n### {name}({c})\n" + "\n".join(f"- {i}" for i in items[:2])
 
-# ── 市场热点选股 ──
-def get_top_movers():
-    """从新浪拉涨幅榜+换手率榜，筛选潜在标的"""
+# ── 市场热点选股（全时段运行）──
+def get_top_movers(page_size=40):
+    """从新浪拉涨幅榜+换手率榜，筛选潜在短线标的"""
     candidates = []
     try:
-        # 涨幅榜前40
-        url = "http://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page=1&num=40&sort=changepercent&asc=0&node=hs_a"
+        url = f"http://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData?page=1&num={page_size}&sort=changepercent&asc=0&node=hs_a"
         req = urllib.request.Request(url, headers={"Referer": "https://finance.sina.com.cn"})
         data = urllib.request.urlopen(req, timeout=10).read().decode("gbk")
         stocks = json.loads(data)
@@ -144,21 +143,21 @@ def get_top_movers():
             # 筛选：涨幅2-8%（健康上涨非涨停）、主板优先、换手>3%
             if 2 < chg < 8 and turnover > 3 and (code.startswith("60") or code.startswith("00")):
                 candidates.append({"code": code, "name": name, "price": price, "chg_pct": chg, "turnover": turnover, "vol": vol})
-            if len(candidates) >= 8:
+            if len(candidates) >= 10:
                 break
     except Exception as e:
         print(f"选股失败: {e}")
-    return candidates[:5]
+    return candidates
 
-# 选股：仅在8:30和14:30（UTC 0点、6点）执行盘前推荐+盘后复盘
-picks_text = ""
+# 全时段扫描：每次推送都带候选股，8:30和14:30扫更广
 utc_hour = time.gmtime().tm_hour
-if utc_hour in [0, 6]:  # 8:30 或 14:30 BJT
-    picks = get_top_movers()
-    if picks:
-        picks_text = "## 今日市场强势候选（涨幅2-8%，换手>3%，主板）\n"
-        picks_text += "\n".join(f"- {p['name']}({p['code']}) | 价格{p['price']} | 涨{p['chg_pct']:+.1f}% | 换手{p['turnover']:.1f}%" for p in picks)
-        picks_text += "\n\n请结合这些候选股，对比用户持仓，给出是否应该换仓的建议。"
+scan_size = 60 if utc_hour in [0, 6] else 40  # 盘前/盘后扫更广
+picks = get_top_movers(page_size=scan_size)
+picks_text = ""
+if picks:
+    picks_text = f"## 今日市场强势候选（涨幅2-8%，换手>3%，主板，扫描{scan_size}只）\n"
+    picks_text += "\n".join(f"- {p['name']}({p['code']}) | 价格{p['price']} | 涨{p['chg_pct']:+.1f}% | 换手{p['turnover']:.1f}%" for p in picks[:6])
+    picks_text += "\n\n请结合这些候选股，对比用户持仓，给出是否应该换仓的建议。如果候选股明显优于当前持仓，请明确指出。"
 
 # ── 调 DeepSeek（短线操作框架）──
 SYSTEM_PROMPT = """你是专业的A股短线交易教练，采用以下五层分析框架。你必须基于用户实际持仓成本，给出可执行的操作指导。
