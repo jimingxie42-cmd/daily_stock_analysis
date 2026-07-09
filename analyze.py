@@ -6,9 +6,18 @@ BASE = os.path.dirname(os.path.abspath(__file__))
 with open(os.path.join(BASE, "holdings.json")) as f:
     holdings = json.load(f)["stocks"]
 
-# ── 拉实时价（新浪） ──
+# ── 读待选池 ──
+watchlist = []
+try:
+    with open(os.path.join(BASE, "watchlist.json")) as f:
+        watchlist = json.load(f).get("stocks", [])
+except:
+    pass
+
+# ── 拉实时价（新浪）──
+all_codes = list(set([s["code"] for s in holdings] + [s["code"] for s in watchlist]))
 codes = [s["code"] for s in holdings]
-url = "http://hq.sinajs.cn/list=" + ",".join(f"sh{c}" if c.startswith("6") else f"sz{c}" for c in codes)
+url = "http://hq.sinajs.cn/list=" + ",".join(f"sh{c}" if c.startswith("6") else f"sz{c}" for c in all_codes)
 req = urllib.request.Request(url, headers={"Referer": "https://finance.sina.com.cn"})
 raw = urllib.request.urlopen(req, timeout=10).read().decode("gbk")
 prices = {}
@@ -121,7 +130,8 @@ def get_kline(code):
         return None
 
 tech_data = {}
-for s in holdings:
+all_stocks = holdings + watchlist
+for s in all_stocks:
     k = get_kline(s["code"])
     if k:
         tech_data[s["code"]] = k
@@ -144,6 +154,20 @@ for s in holdings:
 
 total_pnl = total_value - total_cost
 holdings_text += f"\n总市值{total_value:.0f} | 总成本{total_cost:.0f} | 总浮盈{total_pnl:+.0f}"
+
+# ── 构建待选池摘要 ──
+watchlist_text = ""
+if watchlist:
+    watchlist_text = "## 待选池（关注中，未持仓）\n"
+    for s in watchlist:
+        c = s["code"]
+        if c in prices:
+            p = prices[c]
+            chg = (p["price"]/p["prev_close"] - 1) * 100
+            watchlist_text += f"{s['name']}({c}): 现价{p['price']} | 今涨{chg:+.1f}% | 关注理由: {s['reason']}\n"
+        if c in tech_data:
+            t = tech_data[c]
+            watchlist_text += f"  技术: {t['trend']} | MACD {t['macd_signal']} | RSI{t['rsi']}({t['rsi_label']}) | 量比{t['vol_ratio']} | {t['streak']}\n"
 
 # ── 搜每只票的新闻 ──
 news_text = ""
@@ -290,7 +314,13 @@ SYSTEM_PROMPT = """你是专业的A股短线交易教练，采用以下多层分
 - [ ] 明日开盘应对预案
 
 ## 七、纪律提醒
-（对照短线交易核心纪律，逐条检查当前持仓是否存在违规操作）"""
+（对照短线交易核心纪律，逐条检查当前持仓是否存在违规操作）
+
+## 八、待选池速评（ai-berkshire短线视角）
+对每只待选池股票，用否决清单快速过一遍，给出1-2句结论：
+| 股票 | 现价 | 趋势 | 否决清单 | 距买点 | 评分 | 短评 |
+|------|------|------|:---:|------|:---:|------|
+（否决清单：触发任一条标注❌+编号。评分仅针对短线介入时机: >70可入场 50-70观望 <50不宜。短评1句话，说清楚等什么信号或怕什么风险。）"""
 
 prompt = f"""## 用户持仓
 {holdings_text}
@@ -304,9 +334,11 @@ prompt = f"""## 用户持仓
 ## 相关新闻
 {news_text}
 
+{watchlist_text}
+
 {picks_text}
 
-请严格按以上结构输出（先速览卡→再七段分析）。针对每个时段(现在是北京时间{time.strftime('%H:%M')})，侧重该时段的输出重点。"""
+请严格按以上结构输出（⚡速览卡→否决排查→七段分析→待选池速评）。针对每个时段(现在是北京时间{time.strftime('%H:%M')})，侧重该时段的输出重点。"""
 
 api_key = os.environ.get("OPENAI_API_KEY", "")
 api_base = os.environ.get("OPENAI_BASE_URL", "https://api.deepseek.com/v1")
