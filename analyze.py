@@ -78,11 +78,39 @@ def get_kline(code):
         amp_5d = round((high_5d/low_5d - 1)*100, 2) if low_5d > 0 else 0
         # 距20日高/低的百分比位置
         pos_20d = round((close - low_20d) / (high_20d - low_20d) * 100, 1) if high_20d != low_20d else 50
+        # MACD (12,26,9)
+        ema12 = closes[0]
+        ema26 = closes[0]
+        dif_list = []
+        for i, c in enumerate(closes):
+            ema12 = c * 2/13 + ema12 * 11/13
+            ema26 = c * 2/27 + ema26 * 25/27
+            dif_list.append(ema12 - ema26)
+        dif = round(dif_list[-1], 3)
+        dea = round(sum(dif_list[-9:])/9, 3) if len(dif_list) >= 9 else dif
+        macd_bar = round((dif - dea) * 2, 3)
+        macd_signal = "金叉🟢" if dif > dea and dif_list[-2] <= sum(dif_list[-10:-1])/9 else ("死叉🔴" if dif < dea else "走平")
+        # RSI (14)
+        gains = [max(closes[i]-closes[i-1], 0) for i in range(1, len(closes))]
+        losses = [max(closes[i-1]-closes[i], 0) for i in range(1, len(closes))]
+        avg_gain = sum(gains[-14:])/14 if len(gains) >= 14 else sum(gains)/len(gains)
+        avg_loss = sum(losses[-14:])/14 if len(losses) >= 14 else sum(losses)/len(losses)
+        rsi = round(100 - 100/(1 + avg_gain/avg_loss), 1) if avg_loss > 0 else 100.0
+        rsi_label = "超卖" if rsi < 30 else ("超买" if rsi > 70 else ("偏强" if rsi > 50 else "偏弱"))
+        # 布林带 (20,2)
+        std20 = (sum((c - ma20)**2 for c in closes[-20:])/20)**0.5
+        boll_upper = round(ma20 + 2*std20, 2)
+        boll_lower = round(ma20 - 2*std20, 2)
+        boll_width = round((boll_upper - boll_lower)/ma20*100, 1)
+        boll_pos = round((close - boll_lower)/(boll_upper - boll_lower)*100, 1) if boll_upper != boll_lower else 50
         return {
             "close": close, "open": float(latest["open"]), "high": float(latest["high"]), "low": float(latest["low"]),
             "ma5": round(ma5,2), "ma10": round(ma10,2), "ma20": round(ma20,2),
             "bias_ma5": round((close-ma5)/ma5*100,2),
             "vol_ratio": round(vol_ratio,2), "trend": trend,
+            "macd_dif": dif, "macd_dea": dea, "macd_bar": macd_bar, "macd_signal": macd_signal,
+            "rsi": rsi, "rsi_label": rsi_label,
+            "boll_upper": boll_upper, "boll_lower": boll_lower, "boll_width": boll_width, "boll_pos": boll_pos,
             "volume": int(volumes[-1]),
             "high_5d": round(high_5d,2), "low_5d": round(low_5d,2),
             "high_10d": round(high_10d,2), "low_10d": round(low_10d,2),
@@ -160,9 +188,22 @@ if picks:
     picks_text += "\n\n请结合这些候选股，对比用户持仓，给出是否应该换仓的建议。如果候选股明显优于当前持仓，请明确指出。"
 
 # ── 调 DeepSeek（短线操作框架）──
-SYSTEM_PROMPT = """你是专业的A股短线交易教练，采用以下五层分析框架。你必须基于用户实际持仓成本，给出可执行的操作指导。
+SYSTEM_PROMPT = """你是专业的A股短线交易教练，采用以下多层分析框架。你必须基于用户实际持仓成本，给出可执行的操作指导。
 
 注意：即使部分数据获取失败，也必须基于现有数据和你的内置知识继续完整分析，不得拒绝分析。
+
+【第零层：快速否决清单 | ai-berkshire】
+在进入技术分析之前，先用这8条红线排查。触发任何一条→直接建议离场，不管技术面多好看：
+| # | 红线 | 触发条件 |
+|---|------|---------|
+| 1 | 单日放量暴跌 >7% | 量比>2 + 跌幅>7% → 出货信号，不猜底 |
+| 2 | 连跌超5天+均线空头 | MA5<MA10<MA20 + 连跌5天 → 趋势恶化 |
+| 3 | 浮亏超15%且持续扩大 | 拒绝承认亏损、等反弹是最大错误 |
+| 4 | 全仓单票(>80%) | 一次黑天鹅就出局，必须降仓位 |
+| 5 | 利好不涨/利空大跌 | 消息面和走势背离 = 主力在出货 |
+| 6 | 高位巨量长上影 | 收盘价远离最高价+量比>3 = 见顶信号 |
+| 7 | 跌破关键支撑且次日不收回 | 跌破20日低点/MA20/整数关口，次日继续低开 |
+| 8 | 不断补仓摊薄成本 | 浮亏加仓是加速亏损的最快方式 |
 
 【第一层：盘面结构与关键价位】
 - 从K线数据中识别：近期最高价/最低价、前高阻力、前低支撑
@@ -225,7 +266,7 @@ SYSTEM_PROMPT = """你是专业的A股短线交易教练，采用以下五层分
 ---
 
 ## 一、今日盘面速览
-（当前价、涨跌幅、量比、均线排列状态、距关键位的距离。一句话总结今日盘面。）
+（当前价、涨跌幅、量比、均线排列、MACD金叉/死叉、RSI状态、布林带位置。一句话总结今日盘面。）
 
 ## 二、关键价位与量价信号
 | 股票 | 支撑1 | 支撑2 | 现价 | 阻力1 | 阻力2 | 量比 | 信号解读 |
@@ -258,7 +299,7 @@ prompt = f"""## 用户持仓
 """ + "\n".join(f"{v['name']}({k}): 现价{v['price']} 今开{v['open']} 最高{v['high']} 最低{v['low']}" for k,v in prices.items()) + f"""
 
 ## 技术指标
-""" + "\n".join(f"{prices.get(c,{}).get('name',c)}({c}): MA5={t['ma5']} MA10={t['ma10']} MA20={t['ma20']} | 乖离率(MA5)={t['bias_ma5']}% | 量比={t['vol_ratio']} | 均线={t['trend']} | {t['streak']} | 5日高{t['high_5d']}低{t['low_5d']} | 20日高{t['high_20d']}低{t['low_20d']} | 20日位置{t['pos_20d']}% | 5日振幅{t['amp_5d']}%" for c,t in tech_data.items()) + f"""
+""" + "\n".join(f"{prices.get(c,{}).get('name',c)}({c}): MA5={t['ma5']} MA10={t['ma10']} MA20={t['ma20']} | MACD(DIF={t['macd_dif']} DEA={t['macd_dea']} 柱={t['macd_bar']}) {t['macd_signal']} | RSI={t['rsi']}({t['rsi_label']}) | 布林(上{t['boll_upper']} 下{t['boll_lower']} 带宽{t['boll_width']}%) 位置{t['boll_pos']}% | 量比={t['vol_ratio']} | 均线={t['trend']} | {t['streak']} | 5日高{t['high_5d']}低{t['low_5d']} | 20日高{t['high_20d']}低{t['low_20d']}" for c,t in tech_data.items()) + f"""
 
 ## 相关新闻
 {news_text}
