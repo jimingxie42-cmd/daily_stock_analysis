@@ -7,6 +7,8 @@ on:
     - cron: '30 5 * * 1-5'     # 13:30 BJT  午后快照
     - cron: '30 6 * * 1-5'     # 14:30 BJT  盘后复盘+明日预判
   workflow_dispatch:
+  repository_dispatch:
+    types: [trigger]
 
 jobs:
   push:
