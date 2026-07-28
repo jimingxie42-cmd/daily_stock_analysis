@@ -41,13 +41,29 @@ def search_news(query):
 
 # ── 拉 K 线数据 计算技术指标 ──
 def get_kline(code):
-    """获取30日K线，返回MA5/MA10/MA20/量比/近期高低点/连涨跌"""
+    """获取30日K线，返回MA5/MA10/MA20/量比/近期高低点/连涨跌。
+    多域名fallback：GitHub Actions(美国IP)可能被墙，逐个尝试。"""
     mkt = "sh" if code.startswith("6") else "sz"
+    urls = [
+        f"https://quotes.sina.cn/cn/api/jsonp_v2.php/data/CN_MarketData.getKLineData?symbol={mkt}{code}&scale=day&ma=no&datalen=30",
+        f"http://money.finance.sina.com.cn/quotes_service/api/json_v2.php/CN_MarketData.getKLineData?symbol={mkt}{code}&scale=day&ma=no&datalen=30",
+    ]
+    data = None
+    for url in urls:
+        try:
+            req = urllib.request.Request(url, headers={"Referer": "https://finance.sina.com.cn"})
+            raw = urllib.request.urlopen(req, timeout=10).read().decode("utf-8")
+            # Sina API有时返回JSONP格式: callback({...})
+            if raw.startswith("/*"):
+                raw = raw.split("*/")[-1]
+            if raw.startswith("callback("):
+                raw = raw[raw.index("(")+1 : raw.rindex(")")]
+            data = json.loads(raw)
+            if data: break
+        except:
+            continue
+    if not data: return None
     try:
-        url = f"http://money.finance.sina.com.cn/quotes_service/api/json_v2.php/CN_MarketData.getKLineData?symbol={mkt}{code}&scale=30&ma=no&datalen=30"
-        req = urllib.request.Request(url, headers={"Referer": "https://finance.sina.com.cn"})
-        data = json.loads(urllib.request.urlopen(req, timeout=10).read())
-        if not data: return None
         closes = [float(d["close"]) for d in data]
         highs = [float(d["high"]) for d in data]
         lows = [float(d["low"]) for d in data]
