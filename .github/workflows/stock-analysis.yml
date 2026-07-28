@@ -1,6 +1,8 @@
 name: 股票分析推送
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
   schedule:
     # 开盘前 (9:25 BJT) — 集合竞价出结果
