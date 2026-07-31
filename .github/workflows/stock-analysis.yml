@@ -4,17 +4,9 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
-  schedule:
-    # 开盘前 (9:25 BJT) — 集合竞价出结果
-    - cron: '25 1 * * 1-5'
-    # 早盘观察 (9:55 BJT) — 开盘后走势
-    - cron: '55 1 * * 1-5'
-    # 午盘收官 (11:00 BJT) — 上午收盘前
-    - cron: '0 3 * * 1-5'
-    # 午后观察 (13:30 BJT) — 午后开盘走势
-    - cron: '30 5 * * 1-5'
-    # 尾盘判断 (14:30 BJT) — 收盘前30分钟
-    - cron: '30 6 * * 1-5'
+  # ⚠️ cron 已迁移至阿里云 FC，此处仅保留手动触发
+  # schedule:
+  #   - cron: '25 1 * * 1-5'
   repository_dispatch:
     types: [trigger]
 
