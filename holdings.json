@@ -1,8 +1,17 @@
 {
   "stocks": [
-    {"code": "002558", "name": "巨人网络", "shares": 200, "cost": 30.810},
-    {"code": "159941", "name": "纳指ETF", "shares": 200, "cost": 1.524},
-    {"code": "603738", "name": "泰晶科技", "shares": 100, "cost": 28.908}
+    {
+      "code": "159941",
+      "name": "纳指ETF",
+      "shares": 200,
+      "cost": 1.524
+    },
+    {
+      "code": "002594",
+      "name": "比亚迪",
+      "shares": 100,
+      "cost": 0.0
+    }
   ],
-  "updated": "2026-08-03"
+  "updated": "2026-08-19"
 }
